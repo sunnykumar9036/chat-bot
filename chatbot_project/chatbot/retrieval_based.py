@@ -1,30 +1,55 @@
-# retrieval_based.py
-
 import json
-import os
+import re
+from pathlib import Path
+from nltk.stem import PorterStemmer
 
-# Example: Load your dataset once at startup
-DATA_FILE = os.path.join(os.path.dirname(__file__), "rrce_dataset_.json")
+BASE = Path(__file__).resolve().parent
+DATA_PATH = BASE / "rrce_dataset_updated.json"
 
-try:
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        dataset = json.load(f)
-except Exception as e:
-    print(f"⚠️ Error loading dataset: {e}")
-    dataset = {}
+ps = PorterStemmer()
 
-def get_answer(query):
-    """
-    Returns the best answer for a given query from your dataset.
-    Replace this with your actual retrieval logic.
-    """
-    query_lower = query.strip().lower()
+# Load dataset (expects a list of Q/A dicts)
+with open(DATA_PATH, 'r', encoding='utf-8') as f:
+    try:
+        DATA = json.load(f)
+        # If the JSON is a dict with key "questions" adjust accordingly.
+        if isinstance(DATA, dict) and "questions" in DATA:
+            QA = DATA["questions"]
+        else:
+            QA = DATA
+    except Exception:
+        QA = []
 
-    # Simple rule-based search example
-    for item in dataset.get("questions", []):
-        question_text = item.get("question", "").lower()
-        if query_lower in question_text:
-            return item.get("answer", "Sorry, I don't have an answer for that.")
+def normalize(text):
+    text = text.lower()
+    tokens = re.findall(r"\w+", text)
+    return " ".join(ps.stem(t) for t in tokens)
 
-    # Fallback response
-    return "Sorry, I don't have an answer for that."
+# Build a simple index (question_norm -> answer)
+INDEX = []
+for item in QA:
+    q = item.get("question") or item.get("q") or ""
+    a = item.get("answer") or item.get("a") or item.get("response") or ""
+    INDEX.append((normalize(q), a))
+
+def get_answer(query: str) -> str:
+    qn = normalize(query)
+    # exact substring match first
+    for ques, ans in INDEX:
+        if qn and ques and qn in ques:
+            return ans
+
+    # fallback: token-overlap score
+    qset = set(qn.split())
+    best_ans = None
+    best_score = 0
+    for ques, ans in INDEX:
+        score = len(qset & set(ques.split()))
+        if score > best_score:
+            best_score = score
+            best_ans = ans
+
+    if best_score > 0:
+        return best_ans
+
+    return "Sorry, I don't know the answer to that yet."
