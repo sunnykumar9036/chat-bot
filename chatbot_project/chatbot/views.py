@@ -1,27 +1,28 @@
-from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
+from .retrieval_based import load_data, find_best_match
 
-# import your retrieval model function
-from .retrieval_based import get_answer
-
-def amc(request):
-    # Renders templates/amc.html
-    return render(request, "amc.html")
+qa_data = load_data()  # load dataset once
 
 @csrf_exempt
 def chatbot_api(request):
-    if request.method != "POST":
-        return JsonResponse({"response": "Send POST with JSON {query: '...'}"}, status=400)
-    try:
-        data = json.loads(request.body.decode("utf-8"))
-        query = data.get("query", "").strip()
-        if not query:
-            return JsonResponse({"response": "Empty query"}, status=400)
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            query = data.get("query", "")
 
-        # call your retrieval model:
-        answer = get_answer(query)
-        return JsonResponse({"response": answer})
-    except Exception as e:
-        return JsonResponse({"response": f"Error: {str(e)}"}, status=500)
+            # 🔎 Run retrieval
+            response = find_best_match(query, qa_data)
+
+            return JsonResponse({"response": response})
+        except Exception as e:
+            return JsonResponse({"response": f"⚠️ Error: {str(e)}"}, status=400)
+
+    return JsonResponse({"response": "Invalid request method"}, status=405)
+
+from django.shortcuts import render
+
+def amc(request):
+    return render(request, "amc.html")
+

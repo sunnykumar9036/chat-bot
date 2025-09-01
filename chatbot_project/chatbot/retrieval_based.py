@@ -1,55 +1,24 @@
 import json
-import re
-from pathlib import Path
-from nltk.stem import PorterStemmer
+import os
+from difflib import SequenceMatcher
 
-BASE = Path(__file__).resolve().parent
-DATA_PATH = BASE / "rrce_dataset_updated.json"
+# Use your dataset file
+DATA_FILE = os.path.join(os.path.dirname(__file__), "rrce_dataset_updated.json")
 
-ps = PorterStemmer()
+def load_data():
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-# Load dataset (expects a list of Q/A dicts)
-with open(DATA_PATH, 'r', encoding='utf-8') as f:
-    try:
-        DATA = json.load(f)
-        # If the JSON is a dict with key "questions" adjust accordingly.
-        if isinstance(DATA, dict) and "questions" in DATA:
-            QA = DATA["questions"]
-        else:
-            QA = DATA
-    except Exception:
-        QA = []
+def find_best_match(query, data):
+    best_match = None
+    highest_score = 0
 
-def normalize(text):
-    text = text.lower()
-    tokens = re.findall(r"\w+", text)
-    return " ".join(ps.stem(t) for t in tokens)
+    for item in data:
+        score = SequenceMatcher(None, query.lower(), item["question"].lower()).ratio()
+        if score > highest_score:
+            highest_score = score
+            best_match = item
 
-# Build a simple index (question_norm -> answer)
-INDEX = []
-for item in QA:
-    q = item.get("question") or item.get("q") or ""
-    a = item.get("answer") or item.get("a") or item.get("response") or ""
-    INDEX.append((normalize(q), a))
-
-def get_answer(query: str) -> str:
-    qn = normalize(query)
-    # exact substring match first
-    for ques, ans in INDEX:
-        if qn and ques and qn in ques:
-            return ans
-
-    # fallback: token-overlap score
-    qset = set(qn.split())
-    best_ans = None
-    best_score = 0
-    for ques, ans in INDEX:
-        score = len(qset & set(ques.split()))
-        if score > best_score:
-            best_score = score
-            best_ans = ans
-
-    if best_score > 0:
-        return best_ans
-
-    return "Sorry, I don't know the answer to that yet."
+    if highest_score > 0.6:  # similarity threshold
+        return best_match["answer"]
+    return "I'm not sure about that yet, but I'm learning!"

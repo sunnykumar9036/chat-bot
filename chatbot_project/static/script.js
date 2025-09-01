@@ -1,4 +1,21 @@
-// ===== Login =====
+// ========= CSRF Helper =========
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      cookie = cookie.trim();
+      if (cookie.startsWith(name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+const csrftoken = getCookie('csrftoken');
+
+// ========= Login / Logout =========
 function login() {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value.trim();
@@ -6,24 +23,25 @@ function login() {
   if (username && password) {
     localStorage.setItem("loggedIn", "true");
     localStorage.setItem("studentName", username);
+
     document.getElementById("loginPage").style.display = "none";
     document.getElementById("portalPage").style.display = "flex";
+
     openSection("chatSection");
     loadProfile();
-    newChat(); // Start a fresh chat on login
+    newChat();
   } else {
-    alert("Please enter both username and password.");
+    alert("⚠️ Please enter both username and password.");
   }
 }
 
-// ===== Logout =====
 function logout() {
   localStorage.removeItem("loggedIn");
   document.getElementById("portalPage").style.display = "none";
   document.getElementById("loginPage").style.display = "flex";
 }
 
-// ===== Section Switching =====
+// ========= Section Switching =========
 function openSection(sectionId) {
   document.querySelectorAll(".section").forEach(sec => sec.style.display = "none");
   const selected = document.getElementById(sectionId);
@@ -32,11 +50,11 @@ function openSection(sectionId) {
   if (sectionId === "profileSection") loadProfile();
 }
 
-// ===== Chatbot Logic =====
+// ========= Chatbot =========
 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || [];
 let currentChat = [];
 
-function sendMessage() {
+async function sendMessage() {
   const input = document.getElementById("userInput");
   const message = input.value.trim();
   if (!message) return;
@@ -44,20 +62,22 @@ function sendMessage() {
   addMessage("user", message);
   input.value = "";
 
-  fetch("/api/chat/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: message })
-  })
-    .then(res => res.json())
-    .then(data => {
-      addMessage("bot", data.response);
-      saveCurrentChat(); // Save after every bot reply
-    })
-    .catch(err => {
-      console.error("Error:", err);
-      addMessage("bot", "⚠️ Sorry, something went wrong.");
+  try {
+    let response = await fetch("/api/chat/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrftoken
+      },
+      body: JSON.stringify({ query: message })
     });
+
+    let data = await response.json();
+    addMessage("bot", data.response || "⚠️ Sorry, something went wrong.");
+    saveCurrentChat();
+  } catch (error) {
+    addMessage("bot", "⚠️ Network error!");
+  }
 }
 
 function addMessage(sender, text) {
@@ -79,14 +99,12 @@ function saveCurrentChat() {
   }
 }
 
-// Start new chat
 function newChat() {
   currentChat = [];
   document.getElementById("chatBox").innerHTML =
     '<div class="message bot">Hello! I am your Hybrid Chatbot. How can I help you today?</div>';
 }
 
-// Show previous chats
 function showHistory() {
   const historyBox = document.getElementById("chatHistory");
   const list = document.getElementById("historyList");
@@ -108,7 +126,7 @@ function loadChat(index) {
   chatHistory[index].forEach(msg => addMessage(msg.sender, msg.text));
 }
 
-// ===== Profile Logic =====
+// ========= Profile =========
 function loadProfile() {
   const name = localStorage.getItem("studentName") || "Student";
   document.getElementById("welcomeMessage").innerText = "Welcome, " + name;
@@ -140,7 +158,7 @@ function saveName() {
   document.getElementById("editNameBtn").style.display = "inline-block";
 }
 
-// ===== Auto-login Check =====
+// ========= Auto-login =========
 window.onload = function() {
   if (localStorage.getItem("loggedIn") === "true") {
     document.getElementById("loginPage").style.display = "none";
@@ -148,5 +166,16 @@ window.onload = function() {
     openSection("chatSection");
     loadProfile();
     newChat();
+  }
+
+  // Allow Enter key to send
+  const input = document.getElementById("userInput");
+  if (input) {
+    input.addEventListener("keypress", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
   }
 };

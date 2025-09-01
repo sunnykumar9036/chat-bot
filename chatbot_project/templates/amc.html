@@ -5,6 +5,7 @@
   <meta charset="utf-8" />
   <title>AMC Chatbot</title>
   <link rel="stylesheet" href="{% static 'style.css' %}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
 <body>
   <!-- Login Page -->
@@ -15,7 +16,7 @@
     </div>
     <div class="login-right">
       <div class="login-box">
-        <h2>Login Student/parent</h2>
+        <h2>Login Student/Parent</h2>
         <input id="username" placeholder="Username / Email" />
         <input id="password" type="password" placeholder="Password" />
         <button onclick="login()">Login</button>
@@ -46,7 +47,7 @@
         </div>
         <div class="input-box">
           <input id="userInput" placeholder="Type your message..." />
-          <button onclick="sendMessage()">Send</button>
+          <button onclick="sendMessage()">➡️</button>
         </div>
         <div id="chatHistory" class="chat-history" style="display:none;">
           <h3>Previous Chats</h3>
